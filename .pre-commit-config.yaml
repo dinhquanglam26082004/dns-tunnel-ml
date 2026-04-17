@@ -1,0 +1,65 @@
+# Pre-commit hooks configuration for DNS-Tunnel-ML
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Ruff - fast Python linter + formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.8
+    hooks:
+      - id: ruff
+        name: Ruff lint
+        args: ["--fix", "--line-length=100"]
+      - id: ruff-format
+        name: Ruff format
+        args: ["--line-length=100"]
+
+  # MyPy - static type checker
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.7.1
+    hooks:
+      - id: mypy
+        name: MyPy type check
+        additional_dependencies: ["types-PyYAML", "types-requests"]
+        args: ["--python-version=3.10", "--ignore-missing-imports", "--warn-unused-configs"]
+        language_version: python3.10
+
+  # YAML validation
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+        name: Check YAML
+        args: ["--unsafe"]
+      - id: check-merge-conflict
+        name: Check merge conflicts
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+        args: ["--markdown-friendly"]
+      - id: end-of-file-fixer
+        name: Fix end of file
+      - id: check-added-large-files
+        name: Check for large files
+        args: ["--maxkb=1000"]
+
+  # Security checks
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        name: Security check (Bandit)
+        args: ["-ll", "-r", "src/"]
+        types: [python]
+
+# Configuration options
+default_language_version:
+  python: python3.10
+
+ci:
+  autofix_commit_msg: "refactor: auto fixes by pre-commit hooks"
+  autofix_prs: true
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "chore: update pre-commit hooks"
+  autoupdate_schedule: monthly
+  skip: []
+  submodules: false

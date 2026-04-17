@@ -1,0 +1,72 @@
+# ============================================================
+# Gao 2024 DNS Tunnel Dataset — Pipeline Configuration
+# Source: data/gao2024_source/ (ggyggy666/DNS-Tunnel-Datasets)
+# Paper : GraphTunnel (IEEE 2024) doi:10.1109/TIFS.2024.10636232
+# ============================================================
+
+paths:
+  # Integrated parquet output từ integrate_gao2024.py
+  input_dir: "data/raw"
+  input_file: "data/raw/gao_dns_tunnel_2024_parsed.parquet"
+
+  # Output directory cho feature splits
+  output_dir: "data/splits"
+
+  # Log
+  log_file: "logs/data_pipeline.log"
+
+# Temporal split — chronological (prevents data leakage)
+# Timeline: [TRAIN 70%] [VAL 15%] [TEST 15%]  oldest → newest
+split_ratios:
+  train: 0.70
+  val:   0.15
+  test:  0.15
+
+# Feature engineering
+features:
+  extract:
+    - qname_entropy        # Shannon entropy of domain string
+    - qname_length         # Total length of FQDN
+    - numeric_ratio        # Ratio of digits in domain
+    - subdomain_depth      # Number of dots -> subdomain levels
+    - qtype                # DNS query type (1=A, 28=AAAA, 16=TXT, etc.)
+    - iat_seconds          # Inter-arrival time (per source_file session) [OPTIONAL - currently removed]
+    - max_label_len        # [NEW] Longest dot-separated label — tunnels pack payload into one long label
+    - vowel_ratio          # [NEW] Vowel fraction — base32/base64 encoding disrupts natural vowel ratios
+    - unique_char_ratio    # [NEW] Unique chars / total len — base32=32 chars vs natural language
+    - label                # Target: 0=benign, 1=tunnel
+  method: "vectorized"
+
+# Gao 2024 category notes:
+# normal        (label=0) -> ~2,012,494 benign records — Cloudflare top-1M
+# tunnel        (label=1) -> ~624,007  known tunnels  — dnscat2/dnspot/iodine/tuns
+# unkownTunnel  (label=1) -> ~772,780  unknown tunnels — CobaltStrike/dns2tcp/tcp-over-dns [OOD TEST]
+# crossEndPoint (label=1) -> ~212,549  Android tunnels — AndIodine [OOD TEST]
+# wildcard      (label=0) -> ~638,060  wildcard benign — Cloudflare wildcard [TRAINING]
+#
+# IMPORTANT: wildcard is included in TRAINING to fix false positives.
+# wildcard domains have high subdomain_depth + long qnames — similar to tunnels.
+# Adding wildcard teaches the model to distinguish encoding patterns (numeric_ratio,
+# max_label_len, unique_char_ratio) from natural wildcard structure.
+#
+# OOD evaluation (generalization test):
+#   unkownTunnel + crossEndPoint -> held out (model has never seen these tools)
+filter_categories:
+  - normal
+  - tunnel
+  - wildcard
+
+output:
+  # 'separate' creates train.parquet / val.parquet / test.parquet
+  format: "separate"
+  compression: "zstd"
+  save_metadata: true
+
+logging:
+  level: "INFO"
+  file: "logs/data_pipeline.log"
+
+validation:
+  handle_nan: "fill"
+  require_timestamp: true
+  log_class_distribution: true

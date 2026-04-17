@@ -1,0 +1,84 @@
+# DNS Tunnel Data Pipeline Configuration
+# Orchestrates: Load -> Feature Engineering -> Temporal Split -> Save
+
+paths:
+  # Input data discovery order: processed/ (priority) -> raw/ (fallback)
+  input_dir: "data/processed"
+  
+  # Output directory where splits are saved
+  output_dir: "data/splits"
+  
+  # Optional: Log file for detailed execution trace
+  log_file: "logs/data_pipeline.log"
+
+# Temporal split ratios (must sum to 1.0)
+# NOTE: Split is chronological (sorted by timestamp), preventing data leakage
+split_ratios:
+  train: 0.70      # 70% oldest data -> training set
+  val: 0.15        # 15% middle data -> validation set
+  test: 0.15       # 15% newest data -> test set
+
+# Feature engineering configuration
+features:
+  # Columns to extract as features
+  extract:
+    - qname_entropy        # Shannon entropy of domain characters
+    - qname_length         # Length of domain name
+    - numeric_ratio        # Ratio of numeric chars in domain
+    - subdomain_depth      # Count of dots (subdomain levels)
+    - qtype                # DNS query type (1=A, 28=AAAA, etc.)
+    - iat_seconds          # Inter-arrival time per session (mean)
+    - label                # Target: 0=benign, 1=malicious
+  
+  # Method: vectorized (no apply row-by-row)
+  # All operations use pandas/numpy vectorized methods for performance
+  method: "vectorized"
+
+# Output configuration
+output:
+  # Format options:
+  # - 'separate': Creates train.parquet, val.parquet, test.parquet (recommended for large datasets)
+  # - 'combined': Creates single features.parquet with 'split' column (for batch processing)
+  format: "separate"
+  
+  # Compression: zstd (high compression), snappy (fast), none
+  compression: "zstd"
+  
+  # Include metadata file (pipeline_metadata.json)
+  save_metadata: true
+
+# Logging configuration
+logging:
+  level: "INFO"
+  file: "logs/data_pipeline.log"
+
+# Data validation (optional sanity checks)
+validation:
+  # Check for NaN values - strategy: 'drop', 'fill', 'warn'
+  handle_nan: "fill"      # Fill with 0.0 for numeric features
+  
+  # Validate timestamp column exists and is datetime
+  require_timestamp: true
+  
+  # Check label distribution (log class counts)
+  log_class_distribution: true
+
+# Notes on Temporal Split (Time-series safety)
+# ============================================================
+# Why temporal split (not random)?
+# - DNS tunnel detection is a time-series problem
+# - Random split causes data leakage (test may include temporal patterns from train)
+# - Temporal split respects dependency: train <- val <- test (chronologically)
+# - Mimics real-world deployment: train on past, validate on recent, test on present
+#
+# Timeline:
+#   [TRAIN (70%)] [VAL (15%)] [TEST (15%)]
+#   Oldest                     Newest
+#   t=0          t=T*0.7      t=T*0.85      t=T
+#
+# File mapping for training:
+# - scripts/train/train_rf.py reads:
+#   - data/splits/train.parquet  (input features)
+#   - data/splits/val.parquet    (validation metrics)
+#   OR
+#   - data/splits/features.parquet with split=='train' (if combined format)

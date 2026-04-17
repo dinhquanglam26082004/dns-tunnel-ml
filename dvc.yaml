@@ -1,0 +1,26 @@
+# DVC Pipeline for DNS Tunnel ML Project
+# Version: 3.x
+# Usage: dvc repro
+
+stages:
+  # Stage 1: Download datasets from configured sources
+  download:
+    cmd: python scripts/data/download_datasets.py
+    deps: []
+    outs:
+      - data/raw:
+          type: dir
+    plots: []
+    metrics: []
+    params: []
+
+  # Stage 2: Validate raw datasets schema and data quality
+  validate:
+    cmd: python scripts/data/validate.py
+    deps:
+      - data/raw
+    outs:
+      - data/validation/report.json
+    plots: []
+    metrics: []
+    params: []

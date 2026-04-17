@@ -1,0 +1,146 @@
+# Random Forest Model Training Configuration
+# This file defines hyperparameters for the DNS Tunnel RF classifier
+# Usage: python scripts/train/train_rf.py --config configs/train_rf.yaml
+
+# Model hyperparameters
+model:
+  # Number of trees in the random forest
+  # Higher values increase model complexity and training time
+  # Typical range: 50-500. Default: 100
+  n_estimators: 200
+
+  # Maximum depth — limit to 20 to reduce overfitting on row-level splits
+  max_depth: 20
+
+  # Minimum number of samples required to split an internal node
+  # Higher values encourage simpler trees and faster training
+  # Typical range: 2-10. Default: 2
+  min_samples_split: 5
+
+  # Minimum number of samples required at a leaf node
+  # Higher values smooth the model
+  # Typical range: 1-5. Default: 1
+  min_samples_leaf: 2
+
+  # Handle class imbalance in DNS tunnel detection
+  # 'balanced' adjusts weights inversely proportional to class frequency
+  # null (None) uses default equal weights
+  # Use 'balanced' when malicious samples are rare. Default: null
+  class_weight: "balanced"
+
+  # Random seed for reproducibility
+  # Ensures same split decisions across runs
+  random_state: 42
+
+  # Number of parallel jobs
+  # -1 uses all available processors
+  # 1 disables parallelization
+  n_jobs: -1
+
+# Data configuration
+# IMPORTANT: Run these commands in order:
+# 1. python scripts/data/build_pipeline.py (compute features + temporal split)
+# 2. python scripts/data/stratified_split.py (balance classes)
+# This generates the stratified splits referenced below
+data:
+  # Path to training data — Gao 2024 split (output of build_pipeline.py)
+  train_path: "data/splits/train.parquet"
+
+  # Path to validation data — Gao 2024 split
+  val_path: "data/splits/val.parquet"
+
+  # Name of target column in data
+  # Column containing binary labels: 0=benign, 1=malicious
+  target_col: "label"
+
+  # Feature columns — 8 features, NO iat_seconds (leaky)
+  # iat_seconds REMOVED: time-window session_id made it a class proxy.
+  # 3 new encoding features added to fix wildcard false positives:
+  #   max_label_len   : longest label between dots (tunnels pack payload in one label)
+  #   vowel_ratio     : base32/64 encoding disrupts natural vowel ratios
+  #   unique_char_ratio: base32 charset fingerprint vs natural language
+  feature_cols:
+    - qname_entropy
+    - qname_length
+    - numeric_ratio
+    - subdomain_depth
+    - qtype
+    - max_label_len
+    - vowel_ratio
+    - unique_char_ratio
+
+  # Test size ratio (IGNORED when val_path is specified)
+  # Only used if val_path is null for random train_test_split
+  # Temporal split recommended, so keep val_path populated
+  test_size: 0.2
+
+# Data validation before training (prevents path errors)  
+# If validation fails, training will not proceed
+validation:
+  # Check if train_path exists before training starts
+  check_train_exists: true
+  
+  # Check if val_path exists before training starts (if specified)
+  check_val_exists: true
+  
+  # Minimum number of samples required in training set
+  min_train_samples: 100
+  
+  # Minimum number of samples required in validation set
+  min_val_samples: 10
+  
+  # Check for required feature columns
+  # Set to null to auto-detect based on data
+  required_features: null
+
+# MLflow experiment tracking configuration
+mlflow:
+  # SQLite backend — avoids deprecated file-store and mlruns meta.yaml issues
+  tracking_uri: "sqlite:///mlflow.db"
+  
+  # Alternative: file-based backend (deprecated as of Feb 2026)
+  # tracking_uri: "file:./mlruns"
+
+  # Experiment name for grouping runs
+  # Create or reuse experiment with this name
+  # Useful for comparing multiple model variants
+  experiment_name: "DNS-Tunnel-RF-Gao2024"
+
+  # Run name (optional, auto-generated if null)
+  # Override with: --run-name "stratified-fixed-v1"
+  run_name: null
+  
+  # Register model to MLflow registry
+  # Set to true to register trained model
+  register_model: true
+  
+  # Model name in registry
+  model_name: "dns-tunnel-rf"
+
+  # Tags to attach to the run
+  # Useful for filtering/searching in MLflow UI
+  tags:
+    model_type: "Random Forest"
+    dataset: "DNS Tunnel Detection"
+    task: "Binary Classification"
+    split_method: "stratified"
+    split_version: "1.0"
+
+# Output configuration
+output:
+  # Directory to save trained model (also logged to MLflow)
+  models_dir: "models/"
+
+  # Directory for plots and visualizations
+  plots_dir: "plots/"
+
+  # Save confusion matrix and feature importance plots
+  save_plots: true
+
+# Logging configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
+
+  # Log file path (null = only console output)
+  log_file: "logs/train_rf.log"
