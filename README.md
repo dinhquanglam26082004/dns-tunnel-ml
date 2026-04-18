@@ -10,19 +10,7 @@
 
 ---
 
-## Kết Quả Mô Hình (Honest Evaluation)
 
-> Evaluated on **tools the model has never seen** during training (cross-tool split).
-
-| Eval Set | Accuracy | Recall | F1 |
-|---|---|---|---|
-| `unkownTunnel` — CobaltStrike, dns2tcp, tcp-over-dns | **0.9916** | **0.9916** | **0.9958** |
-| `crossEndPoint` — Android/AndIodine | **0.9982** | **0.9982** | **0.9991** |
-| `wildcard` — Cloudflare wildcard benign | **0.9994** | — | — |
-
-*Model trained on `normal + tunnel + wildcard`. Tested on `unkownTunnel + crossEndPoint` (zero-shot).*
-
----
 
 ## Quick Start
 
